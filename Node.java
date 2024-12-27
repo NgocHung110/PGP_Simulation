@@ -1,183 +1,168 @@
+import javax.crypto.*;
+import javax.crypto.spec.SecretKeySpec;
 import java.io.*;
 import java.net.*;
 import java.security.*;
 import java.util.Scanner;
-import javax.crypto.*;
-import javax.crypto.spec.SecretKeySpec;
+import java.util.concurrent.*;
 
 public class Node {
-    public static void main(String[] args) {
+    private final KeyPair rsaKeyPair;
+    private PublicKey partnerPublicKey;
+    private ObjectInputStream in;
+    private ObjectOutputStream out;
+
+    public Node(KeyPair rsaKeyPair) {
+        this.rsaKeyPair = rsaKeyPair;
+    }
+
+    public void setConnection(Socket socket) throws IOException, ClassNotFoundException {
+        this.out = new ObjectOutputStream(socket.getOutputStream());
+        this.in = new ObjectInputStream(socket.getInputStream());
+
+        // Exchange public keys
+        out.writeObject(rsaKeyPair.getPublic());
+        out.flush();
+        partnerPublicKey = (PublicKey) in.readObject();
+    }
+
+    public void sendMessage(String message) throws Exception {
+        System.out.println("\n=== Encryption Process ===");
+
+        // Step 1: Compute SHA-512 hash
+        MessageDigest sha512 = MessageDigest.getInstance("SHA-512");
+        byte[] hash = sha512.digest(message.getBytes());
+        System.out.println("Step 1: SHA-512 Hash: " + CryptoUtils.bytesToHex(hash));
+
+        // Step 2: Sign the hash using RSA private key
+        Cipher rsaCipher = Cipher.getInstance("RSA");
+        rsaCipher.init(Cipher.ENCRYPT_MODE, rsaKeyPair.getPrivate());
+        byte[] signedHash = rsaCipher.doFinal(hash);
+        System.out.println("Step 2: Digitally Signed Hash: " + CryptoUtils.bytesToHex(signedHash));
+
+        // Step 3: Append message and signed hash
+        String appended = message + "||" + CryptoUtils.bytesToHex(signedHash);
+        System.out.println("Step 3: Appended Message and Signed Hash: " + appended);
+
+        // Step 4: Compress the appended data
+        byte[] compressed = CryptoUtils.compress(appended);
+        System.out.println("Step 4: Compressed Data: " + CryptoUtils.bytesToHex(compressed));
+
+        // Step 5: Encrypt compressed data with DES
+        KeyGenerator keyGen = KeyGenerator.getInstance("DES");
+        SecretKey desKey = keyGen.generateKey();
+        Cipher desCipher = Cipher.getInstance("DES");
+        desCipher.init(Cipher.ENCRYPT_MODE, desKey);
+        byte[] encryptedData = desCipher.doFinal(compressed);
+        System.out.println("Step 5: Encrypted Data with DES: " + CryptoUtils.bytesToHex(encryptedData));
+
+        // Step 6: Encrypt DES key with recipient's RSA public key
+        rsaCipher.init(Cipher.ENCRYPT_MODE, partnerPublicKey);
+        byte[] encryptedDESKey = rsaCipher.doFinal(desKey.getEncoded());
+        System.out.println("Step 6: Encrypted DES Key with RSA: " + CryptoUtils.bytesToHex(encryptedDESKey));
+
+        // Step 7: Send encrypted data and encrypted DES key
+        out.writeObject(new Object[]{encryptedData, encryptedDESKey});
+        out.flush();
+        System.out.println("Step 7: Sent Encrypted Data and Key\n");
+    }
+
+    public void receiveMessage() throws Exception {
+        System.out.println("\n=== Decryption Process ===");
+
+        // Receive data
+        Object[] received = (Object[]) in.readObject();
+        byte[] encryptedData = (byte[]) received[0];
+        byte[] encryptedDESKey = (byte[]) received[1];
+
+        System.out.println("Received Encrypted Data: " + CryptoUtils.bytesToHex(encryptedData));
+        System.out.println("Received Encrypted DES Key: " + CryptoUtils.bytesToHex(encryptedDESKey));
+
+        // Step 1: Decrypt DES key using RSA private key
+        Cipher rsaCipher = Cipher.getInstance("RSA");
+        rsaCipher.init(Cipher.DECRYPT_MODE, rsaKeyPair.getPrivate());
+        byte[] desKeyBytes = rsaCipher.doFinal(encryptedDESKey);
+        SecretKey desKey = new SecretKeySpec(desKeyBytes, "DES");
+        System.out.println("Step 1: Decrypted DES Key: " + CryptoUtils.bytesToHex(desKeyBytes));
+
+        // Step 2: Decrypt data using DES key
+        Cipher desCipher = Cipher.getInstance("DES");
+        desCipher.init(Cipher.DECRYPT_MODE, desKey);
+        byte[] decompressedData = desCipher.doFinal(encryptedData);
+        System.out.println("Step 2: Decrypted Data: " + CryptoUtils.bytesToHex(decompressedData));
+
+        // Step 3: Decompress data
+        String decompressed = CryptoUtils.decompress(decompressedData);
+        System.out.println("Step 3: Decompressed Data: " + decompressed);
+
+        // Step 4: Separate message and signed hash
+        String[] parts = decompressed.split("\\|\\|");
+        String message = parts[0];
+        byte[] signedHash = CryptoUtils.hexToBytes(parts[1]);
+        System.out.println("Step 4: Extracted Message: " + message);
+        System.out.println("Step 4: Extracted Signed Hash: " + CryptoUtils.bytesToHex(signedHash));
+
+        // Step 5: Verify signed hash
+        rsaCipher.init(Cipher.DECRYPT_MODE, partnerPublicKey);
+        byte[] hash = rsaCipher.doFinal(signedHash);
+        System.out.println("Step 5: Decrypted Hash from Signature: " + CryptoUtils.bytesToHex(hash));
+
+        MessageDigest sha512 = MessageDigest.getInstance("SHA-512");
+        byte[] computedHash = sha512.digest(message.getBytes());
+        System.out.println("Step 5: Computed Hash of Message: " + CryptoUtils.bytesToHex(computedHash));
+
+        boolean isValid = MessageDigest.isEqual(hash, computedHash);
+        System.out.println("Step 5: Verification Result: " + (isValid ? "Success" : "Failure"));
+
+        System.out.println("\nFinal Message: " + message + "\n");
+    }
+
+    public static void main(String[] args) throws Exception {
+        @SuppressWarnings("resource")
         Scanner scanner = new Scanner(System.in);
-        ServerSocket serverSocket = null;
+
+        // Generate RSA key pair
+        KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
+        keyGen.initialize(2048);
+        KeyPair rsaKeyPair = keyGen.generateKeyPair();
+
+        Node node = new Node(rsaKeyPair);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+
         Socket socket = null;
-
         try {
-            System.out.print("Are you Alice or Bob? (Alice/Bob): ");
-            String role = scanner.nextLine();
+            @SuppressWarnings("resource")
+            ServerSocket serverSocket = new ServerSocket(12345);
+            System.out.println("Waiting for peer to connect...");
+            socket = serverSocket.accept();
+            System.out.println("Peer connected.");
+        } catch (IOException e) {
+            System.out.println("Could not start server, attempting to connect as client...");
+            socket = new Socket("localhost", 12345);
+            System.out.println("Connected to peer.");
+        }
 
-            // Generate RSA Key Pair
-            KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
-            keyGen.initialize(2048);
-            KeyPair rsaKeyPair = keyGen.generateKeyPair();
+        node.setConnection(socket);
 
-            if (role.equalsIgnoreCase("Alice")) {
-                // Connect to Bob
-                socket = new Socket("localhost", 12345);
-                System.out.println("Connected to Bob.");
-
-                ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
-                PublicKey partnerPublicKey = (PublicKey) in.readObject();
-                System.out.println("Received Bob's public key.");
-
-                ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-                out.writeObject(rsaKeyPair.getPublic());
-                out.flush();
-                System.out.println("Sent Alice's public key to Bob.");
-
+        executor.submit(() -> {
+            try {
                 while (true) {
-                    System.out.print("Enter message to send (or type 'exit' to quit): ");
-                    String message = scanner.nextLine();
-
-                    if (message.equalsIgnoreCase("exit")) {
-                        System.out.println("Exiting...");
-                        break;
-                    }
-
-                    // Step 1: Create SHA-512 Hash
-                    MessageDigest sha512 = MessageDigest.getInstance("SHA-512");
-                    byte[] hash = sha512.digest(message.getBytes());
-                    System.out.println("Step 1: SHA-512 Hash: " + bytesToHex(hash));
-
-                    // Step 2: Digitally Sign the Hash
-                    Signature signature = Signature.getInstance("SHA512withRSA");
-                    signature.initSign(rsaKeyPair.getPrivate());
-                    signature.update(hash);
-                    byte[] signedHash = signature.sign();
-                    System.out.println("Step 2: Digitally Signed Hash: " + bytesToHex(signedHash));
-
-                    // Step 3: Compress Data (Simulated by combining message and signed hash)
-                    String compressedData = message + "::" + bytesToHex(signedHash);
-                    System.out.println("Step 3: Compressed Data: " + compressedData);
-
-                    // Step 4: Encrypt with DES
-                    KeyGenerator keyGenDES = KeyGenerator.getInstance("DES");
-                    SecretKey desKey = keyGenDES.generateKey();
-                    Cipher desCipher = Cipher.getInstance("DES");
-                    desCipher.init(Cipher.ENCRYPT_MODE, desKey);
-                    byte[] encryptedData = desCipher.doFinal(compressedData.getBytes());
-                    System.out.println("Step 4: DES Encrypted Data: " + bytesToHex(encryptedData));
-
-                    // Step 5: Encrypt DES Key with Bob's Public Key
-                    Cipher rsaCipher = Cipher.getInstance("RSA");
-                    rsaCipher.init(Cipher.ENCRYPT_MODE, partnerPublicKey);
-                    byte[] encryptedDESKey = rsaCipher.doFinal(desKey.getEncoded());
-                    System.out.println("Step 5: Encrypted DES Key: " + bytesToHex(encryptedDESKey));
-
-                    // Send Data to Bob
-                    out.writeObject(encryptedDESKey);
-                    out.writeObject(encryptedData);
-                    System.out.println("Data sent to Bob.");
+                    node.receiveMessage();
                 }
-
-            } else {
-                // Bob's Server
-                serverSocket = new ServerSocket(12345);
-                System.out.println("Waiting for Alice...");
-                socket = serverSocket.accept();
-                System.out.println("Alice connected.");
-
-                ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-                out.writeObject(rsaKeyPair.getPublic());
-                out.flush();
-                System.out.println("Sent Bob's public key to Alice.");
-
-                ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
-                PublicKey partnerPublicKey = (PublicKey) in.readObject();
-                System.out.println("Received Alice's public key.");
-
-                while (true) {
-                    try {
-                        // Receive Data
-                        byte[] encryptedDESKey = (byte[]) in.readObject();
-                        byte[] encryptedData = (byte[]) in.readObject();
-                        System.out.println("Data received from Alice.");
-
-                        // Step 6: Decrypt DES Key
-                        Cipher rsaCipher = Cipher.getInstance("RSA");
-                        rsaCipher.init(Cipher.DECRYPT_MODE, rsaKeyPair.getPrivate());
-                        byte[] desKeyBytes = rsaCipher.doFinal(encryptedDESKey);
-                        SecretKey desKey = new SecretKeySpec(desKeyBytes, "DES");
-                        System.out.println("Step 6: Decrypted DES Key: " + bytesToHex(desKeyBytes));
-
-                        // Step 7: Decrypt Data with DES
-                        Cipher desCipher = Cipher.getInstance("DES");
-                        desCipher.init(Cipher.DECRYPT_MODE, desKey);
-                        byte[] decryptedData = desCipher.doFinal(encryptedData);
-                        String decompressedData = new String(decryptedData);
-                        System.out.println("Step 7: Decrypted and Decompressed Data: " + decompressedData);
-
-                        // Step 8: Verify Signature
-                        String[] parts = decompressedData.split("::");
-                        String originalMessage = parts[0];
-                        byte[] signedHash = hexToBytes(parts[1]);
-
-                        MessageDigest sha512 = MessageDigest.getInstance("SHA-512");
-                        byte[] originalHash = sha512.digest(originalMessage.getBytes());
-
-                        Signature signature = Signature.getInstance("SHA512withRSA");
-                        signature.initVerify(partnerPublicKey);
-                        signature.update(originalHash);
-                        boolean isVerified = signature.verify(signedHash);
-
-                        System.out.println("Step 8: Signature Verified: " + isVerified);
-                        System.out.println("Original Message: " + originalMessage);
-                    } catch (EOFException e) {
-                        System.out.println("Connection closed by Alice.");
-                        break;
-                    }
-                }
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            // Close Scanner
-            if (scanner != null) {
-                scanner.close();
+        });
+
+        while (true) {
+            System.out.print("Enter message to send (or type 'exit' to quit): ");
+            String message = scanner.nextLine();
+            if (message.equalsIgnoreCase("exit")) {
+                socket.close();
+                executor.shutdownNow();
+                break;
             }
-            // Close ServerSocket
-            if (serverSocket != null) {
-                try {
-                    serverSocket.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-            // Close Socket
-            if (socket != null) {
-                try {
-                    socket.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
+            node.sendMessage(message);
         }
-    }
-
-    private static String bytesToHex(byte[] bytes) {
-        StringBuilder sb = new StringBuilder();
-        for (byte b : bytes) {
-            sb.append(String.format("%02x", b));
-        }
-        return sb.toString();
-    }
-
-    private static byte[] hexToBytes(String hex) {
-        int len = hex.length();
-        byte[] data = new byte[len / 2];
-        for (int i = 0; i < len; i += 2) {
-            data[i / 2] = (byte) ((Character.digit(hex.charAt(i), 16) << 4)
-                    + Character.digit(hex.charAt(i + 1), 16));
-        }
-        return data;
     }
 }
