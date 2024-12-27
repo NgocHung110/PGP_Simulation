@@ -1,4 +1,4 @@
-# Pretty Good Privacy (PGP) Simulation Using Java Socket
+# Pretty Good Privacy Simulation Using Java Socket
 
 This program simulates how **Pretty Good Privacy (PGP)** works using Java Socket to securely communicate between two terminals. The encryption and decryption process are displayed in both terminals, allowing users to observe how PGP works in practice.
 
