@@ -58,6 +58,13 @@ Before running the project, make sure you have the following installed:
 - The program simulates the process of encryption and decryption using PGP.
 - You can see the encryption and decryption progress in both terminals, illustrating how PGP ensures secure communication between two parties.
 
+## Result
+
+Below is the result after running the simulation on two terminals:
+
+![PGP Simulation Result](images/encryption01.png)
+![PGP Simulation Result](images/decryption01.png)
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
