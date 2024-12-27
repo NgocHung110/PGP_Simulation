@@ -1,25 +1,63 @@
-# PRETTY GOOD PRIVACY SIMULATION USING JAVA SOCKET
+# Pretty Good Privacy (PGP) Simulation Using Java Socket
 
-A program aims to simulate how Pretty Good Privacy (PGP) work and it using Java Socket to securely communicate among 2 terminal.
-
-Encryptions and Decryption progress are displayed in 2 terminal to user can view how PGP work.
+This program simulates how **Pretty Good Privacy (PGP)** works using Java Socket to securely communicate between two terminals. The encryption and decryption process are displayed in both terminals, allowing users to observe how PGP works in practice.
 
 ## Installation
-- Clone repository
-+ Open terminal/git bash
-+ Redirect folder you want to clone
-+ Run "git clone https://github.com/NgocHung110/PGP_Simulation"
-+ Run "code ."
+
+1. **Clone the repository:**
+   - Open your terminal or Git Bash.
+   - Navigate to the folder where you want to clone the repository.
+   - Run the following command:
+     ```bash
+     git clone https://github.com/NgocHung110/PGP_Simulation
+     ```
+   - Open the project in Visual Studio Code:
+     ```bash
+     code .
+     ```
+
+## Prerequisites
+
+Before running the project, make sure you have the following installed:
+
+1. **Java Development Kit (JDK)**:
+   - Download and install the JDK from [Oracle JDK Downloads](https://www.oracle.com/java/technologies/javase-jdk11-downloads.html).
+   - Verify installation by running `java -version` in the terminal.
+
+2. **Visual Studio Code (VSCode)**:
+   - Download and install VSCode from [Visual Studio Code Website](https://code.visualstudio.com/).
+
+3. **Java Extension Pack for VSCode**:
+   - In VSCode, go to the **Extensions** view (Ctrl+Shift+X).
+   - Search for **Extension Pack for Java** and install it.
 
 ## Usage
-1. Install Java Development Kit (JDK) from "https://www.oracle.com/java/technologies/javase-jdk11-downloads.html"
-2. Install VSCode from "https://code.visualstudio.com/"
-3. In VSCode, select "Extensions" and choose "Extension Pack for Java"
 
-## Run Project
-- After install all of the tool above, select terminal in the tool bar, choose "New Terminal".
-- In the Terminal, type "javac Node.java CryptoUtils.java"
-- Next, click "Split Terminal" or (Ctrl + Shift + 5) to open 2 terminal
-- In this Terminal, run "java Node"
-- In another Terminal, again run "java Node"
-Now, you can communicate in 2 terminal and observe how PGP work.
+1. **Compile the program:**
+   - Open the integrated terminal in VSCode.
+   - Compile the Java files by running:
+     ```bash
+     javac Node.java CryptoUtils.java
+     ```
+
+2. **Run the program in two terminals:**
+   - Click on the **Terminal** menu in VSCode and select **New Terminal** to open the first terminal.
+   - In the first terminal, run the following command:
+     ```bash
+     java Node
+     ```
+   - Now, split the terminal by selecting **Split Terminal** or pressing `Ctrl + Shift + 5`.
+   - In the second terminal, run the following command:
+     ```bash
+     java Node
+     ```
+   - Now, you should be able to communicate between the two terminals and observe how PGP works.
+
+## How it Works
+
+- The program simulates the process of encryption and decryption using PGP.
+- You can see the encryption and decryption progress in both terminals, illustrating how PGP ensures secure communication between two parties.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
